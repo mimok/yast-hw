@@ -16,37 +16,47 @@ On the market there is already a large amount of security tokens.
 Most of them are based on proprietary designs while some others are open source.
 On one hand, closed source tokens seem to be based on secure elements while on the other hand, as far as I know, open source tokens
 are based on standard, not security certified, chips like STM32 chips.
-This design choice seems to be mainly dicted by concerns about NDA which come with Secure Elements.
+This design choice seems to be mainly dictated by concerns about NDA which come with Secure Elements.
 
 From my point of view this is a real problem. I agree some tokens based on secure elements are not exempt from vulnerabilities like the 
 [Titan security key](https://www.zdnet.com/article/new-side-channel-attack-can-recover-encryption-keys-from-google-titan-security-keys/) from Google.
 In fact, this token is based on a pretty old secure element A7005 from NXP and therefore things which were secure almost ten years ago are no more secure now.
 However if a old secure element is now vulnerable (but more than 4 months of work were needed to discover and exploit the vulnerability), 
-old non secure chips are **far more** vulnerables. For example, it is possible to [extract the firmware](https://blog.zapb.de/stm32f1-exceptional-failure/) 
+old non secure chips are **far more** vulnerable. For example, it is possible to [extract the firmware](https://blog.zapb.de/stm32f1-exceptional-failure/) 
 from an STM32F1 chip using a pure software attack (ok this is not entirely true as an access to the SWD port is needed). 
 This is this chip which is used in the Nitrokey Start key from Nitrokey. While using a secure element is not a "cure-all", 
 using non-secure and non-certified chips for secure application is almost always a bad idea as you relies on a "untrusted" 
 (not certified) chip exectuting an "untrusted" (not certified) code. 
-Here openess is not really a huge advantage as there is very few people around the world which have the required 
+Here openness is not really a huge advantage as there is very few people around the world which have the required 
 skills needed to perform a valuable security assessment of a security token.
 
 So how a security token can be built using a secure element and still be open source? 
 [SE050 security chip](https://www.nxp.com/products/security-and-authentication/authentication/edgelock-se050-plug-trust-secure-element-family-enhanced-iot-security-with-maximum-flexibility:SE050) 
-from NXP is a preprogrammed secure element embedding a really versatile security applet. 
+from NXP is a pre-programmed secure element embedding a really versatile security applet. 
 All documentation is freely accessible on NXP's website (some documentation requires an account to be accessible) and therefore no NDA is required. 
 The YAST key embeds both a LPC55Sxx chip and the SE050 SE. LPC55Sxx chip can be binded to its SE050 companion using its embedded PUF (Physical Unclonable Function). 
 The resulting hardware comes with both the flexibility and the power of the LPC55 chip and the security of the SE050 secure element which has been certified at level EAL6+ (Hardware and OS) according to the Common Criterias.
 
 ## For which application the YAST token can be used?
-You can basically implements any smartcard-like application using this token. For example the development of an OpenPGP card application is on-going.
-It should also be possible to implement a FIDO2 application because the key is equipped with a button (however there is no LED). However SE050 has some limitations which can be circumvented:
+YAST token is made of a LPC55Sxx MCU connected to a SE050 coprocessor which acts as a secure cryptographic library.
+SE050 is designed to prevent both leakage of cryptographic keys and their usage by unauthorized users. In consequence, YAST token is suited for
+applications which extensively use cryptographic primitives. However, others processing taking place on the LPC55 side do not benefit from SE050 high
+security level. So before using YAST token for a given application, you should be sure that the following hypothesis are verified:
+- LPC55Sxx does not implements any security functions and it is only used as an interface between SE050 chip and the host PC.
+- Or, LPC55Sxx implements some security function but they can only be used if the user is properly authenticated by the SE050 **and** , 
+if we consider the application threat model,the user is not willing to attack his own token.
+
+Concretely, the YAST token can be used to implement application like OpenPGP card (demo application available), 
+FIDO2 protocol (but YAST token does not have any led) or HSM-like applications.
+
+SE050 has some functional limitations which can be circumvented:
 
 - PIN object cannot be atomically updated. You have to first delete then create a new PIN object. 
 If a power loss occurs between PIN deletion and creation then the secure element remains in an improper state which can be exploited by an attacker. 
 Therefore my advise is to lock the secure element using the new PIN before the deletion of the old PIN and unlock the SE at the end of the process. 
 In case of power loss during PIN update, the SE is locked at next reboot and the improper state of the SE cannot be exploited by an attacker which does not have the knowledge of the new PIN.
-- PIN try counters of PIN objects cannot be read (while there are effectiveley decremented when a wrong PIN is entered) 
-so you will have to manage these counters by yourself.This limitation is corrected in the new version of the SE050 which is not yet available.
+- PIN try counters of PIN objects cannot be read (while there are effectively decremented when a wrong PIN is entered) 
+so you will have to manage these counters by yourself. This limitation is corrected in the new version of the SE050 which is not yet available.
 
 At the moment, due to a shortage in LPC55S69 chips, YAST token is based on a LPC55S28 chip which does not implement TrustZone.
 However these two chips are PIN compatible and token design does not need to be changed if one wants to update the chip.
@@ -61,7 +71,7 @@ Soldering is an easy game if you use a hot plate and a hot-air rework station.
 ## Programming and debugging
 A 6-pin header is available for programming and debugging purpose through LPC55 SWD port. 
 A low cost [LPC Link-2](https://www.nxp.com/design/microcontrollers-developer-resources/lpc-microcontroller-utilities/lpc-link2:OM13054)
-from NXP can be used as a debugging probe. You should update it with the [segger firmware](https://www.segger.com/products/debug-probes/j-link/models/other-j-links/lpc-link-2/) to obtain the best performaces.
+from NXP can be used as a debugging probe. You should update it with the [segger firmware](https://www.segger.com/products/debug-probes/j-link/models/other-j-links/lpc-link-2/) to obtain the best performances.
 USB port can also be used to program the LPC55 chip through the on-chip bootloader:
 
 1. First you will have to enable the USB0 interface in the bootloader configuration. To do so, you can load and execute the following [piece of code](docs/unlock_USB0_bootloader.c) trough SWD interface.
